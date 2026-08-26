@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
+import { getAuth } from 'firebase/auth'
 import { getAnalytics, isSupported } from 'firebase/analytics'
 
 const firebaseConfig = {
@@ -14,6 +15,7 @@ const firebaseConfig = {
 
 let app = null
 let db = null
+let auth = null
 let analytics = null
 let hasFirebaseConfig = false
 
@@ -22,6 +24,7 @@ try {
   if (hasFirebaseConfig) {
     app = initializeApp(firebaseConfig)
     db = getFirestore(app)
+    auth = getAuth(app)
     if (typeof window !== 'undefined') {
       isSupported().then(supported => {
         if (supported) analytics = getAnalytics(app)
@@ -32,5 +35,5 @@ try {
   console.warn('Firebase initialization note:', error)
 }
 
-export { app, db, analytics }
+export { app, db, auth, analytics }
 export const firebaseConfigured = hasFirebaseConfig
