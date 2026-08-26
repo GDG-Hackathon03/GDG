@@ -213,7 +213,7 @@ function App({ user, initialProfile, initialProgress, onProfileChange }) {
         )}
 
         {active === 'Internship' && (
-          <InternshipPrep showToast={showToast} />
+          <InternshipPrep showToast={showToast} user={user} />
         )}
 
         {active === 'Companies' && (
@@ -249,7 +249,7 @@ function App({ user, initialProfile, initialProgress, onProfileChange }) {
         )}
 
         {active === 'Mock interviews' && (
-          <MockInterview showToast={showToast} />
+          <MockInterview showToast={showToast} user={user} />
         )}
 
         {active === 'Progress' && (

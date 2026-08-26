@@ -67,19 +67,87 @@ export const upvoteExperience = async (experienceId) => {
   return updated
 }
 
-export const getApplications = async () => {
+export const getApplications = async (uid) => {
+  if (firebaseConfigured && db && uid) {
+    try {
+      const snapshot = await getDocs(query(collection(db, `users/${uid}/applications`), orderBy('appliedDate', 'desc')))
+      if (!snapshot.empty) {
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      }
+    } catch (error) {
+      console.warn('Firestore getApplications failed, falling back to local:', error)
+    }
+  }
   return storage.getApplications(initialApplications)
 }
 
-export const saveApplication = async (application) => {
-  const current = await getApplications()
-  const existsIndex = current.findIndex(a => a.id === application.id)
+export const saveApplication = async (uid, application) => {
   let updated
-  if (existsIndex >= 0) {
-    updated = current.map(a => a.id === application.id ? application : a)
+  const current = await getApplications(uid)
+  
+  if (firebaseConfigured && db && uid) {
+    try {
+      if (application.id && !application.id.startsWith('app-')) {
+        const ref = doc(db, `users/${uid}/applications`, application.id)
+        await updateDoc(ref, application)
+        updated = current.map(a => a.id === application.id ? application : a)
+      } else {
+        const ref = await addDoc(collection(db, `users/${uid}/applications`), application)
+        application.id = ref.id
+        updated = [application, ...current]
+      }
+      storage.setApplications(updated)
+      return updated
+    } catch (error) {
+      console.warn('Firestore saveApplication failed, persisting locally:', error)
+    }
+  }
+
+  // Fallback local
+  if (!application.id || application.id.startsWith('app-')) {
+    application.id = `app-${Date.now()}`
+    updated = [application, ...current]
   } else {
-    updated = [{ ...application, id: `app-${Date.now()}` }, ...current]
+    updated = current.map(a => a.id === application.id ? application : a)
   }
   storage.setApplications(updated)
+  return updated
+}
+
+export const getMockSessions = async (uid) => {
+  if (firebaseConfigured && db && uid) {
+    try {
+      const snapshot = await getDocs(query(collection(db, `users/${uid}/mockSessions`), orderBy('createdAt', 'desc')))
+      if (!snapshot.empty) {
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      }
+    } catch (error) {
+      console.warn('Firestore getMockSessions failed, falling back to local:', error)
+    }
+  }
+  return storage.getMockSessions()
+}
+
+export const saveMockSession = async (uid, session) => {
+  let updated
+  const current = await getMockSessions(uid)
+
+  if (firebaseConfigured && db && uid) {
+    try {
+      const newSession = { ...session, createdAt: serverTimestamp() }
+      const ref = await addDoc(collection(db, `users/${uid}/mockSessions`), newSession)
+      session.id = ref.id
+      updated = [session, ...current]
+      storage.setMockSessions(updated)
+      return updated
+    } catch (error) {
+      console.warn('Firestore saveMockSession failed, persisting locally:', error)
+    }
+  }
+
+  // Fallback local
+  session.id = `mock-${Date.now()}`
+  updated = [session, ...current]
+  storage.setMockSessions(updated)
   return updated
 }

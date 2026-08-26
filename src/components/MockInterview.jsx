@@ -14,9 +14,9 @@ import {
   ChevronRight
 } from 'lucide-react'
 import { initialMockQuestions } from '../data/mockData'
-import { storage } from '../services/storage'
+import { getMockSessions, saveMockSession } from '../services/firestore'
 
-export default function MockInterview({ showToast }) {
+export default function MockInterview({ showToast, user }) {
   const [questions] = useState(initialMockQuestions)
   const [currentIdx, setCurrentIdx] = useState(0)
   const [userAnswer, setUserAnswer] = useState('')
@@ -26,7 +26,13 @@ export default function MockInterview({ showToast }) {
   const [scorecard, setScorecard] = useState(null)
   const [timeLeft, setTimeLeft] = useState(questions[0].timeMinutes * 60)
   const [isTimerRunning, setIsTimerRunning] = useState(false)
-  const [pastSessions, setPastSessions] = useState(() => storage.getMockSessions())
+  const [pastSessions, setPastSessions] = useState([])
+
+  useEffect(() => {
+    if (user?.uid) {
+      getMockSessions(user.uid).then(sessions => setPastSessions(sessions))
+    }
+  }, [user])
 
   const activeQuestion = questions[currentIdx]
 
@@ -106,17 +112,17 @@ export default function MockInterview({ showToast }) {
 
     // Save session to history
     const newSession = {
-      id: `mock-${Date.now()}`,
-      date: 'Today',
       category: activeQuestion.category,
       topic: activeQuestion.topic,
       score: baseScore,
-      feedback: evaluation.feedback
+      feedback: evaluation.feedback,
+      date: new Date().toLocaleDateString()
     }
-    const updated = [newSession, ...pastSessions]
-    setPastSessions(updated)
-    storage.setMockSessions(updated)
-    showToast(`Evaluation complete! Score: ${baseScore}/10`)
+    
+    saveMockSession(user?.uid, newSession).then(updated => {
+      setPastSessions(updated)
+      showToast(`Evaluation complete! Score: ${baseScore}/10`)
+    })
   }
 
   return (

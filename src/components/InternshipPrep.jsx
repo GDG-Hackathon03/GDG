@@ -22,7 +22,7 @@ import {
 } from '../data/mockData'
 import { getApplications, saveApplication } from '../services/firestore'
 
-export default function InternshipPrep({ showToast }) {
+export default function InternshipPrep({ showToast, user }) {
   const [activeTab, setActiveTab] = useState('roadmap')
   const [applications, setApplications] = useState([])
   const [showAddAppModal, setShowAddAppModal] = useState(false)
@@ -36,8 +36,10 @@ export default function InternshipPrep({ showToast }) {
   })
 
   useEffect(() => {
-    getApplications().then(apps => setApplications(apps))
-  }, [])
+    if (user?.uid) {
+      getApplications(user.uid).then(apps => setApplications(apps))
+    }
+  }, [user])
 
   const handleCreateApp = async (e) => {
     e.preventDefault()
@@ -46,7 +48,7 @@ export default function InternshipPrep({ showToast }) {
       ...newApp,
       appliedDate: new Date().toISOString().split('T')[0]
     }
-    const updated = await saveApplication(appToSave)
+    const updated = await saveApplication(user?.uid, appToSave)
     setApplications(updated)
     setShowAddAppModal(false)
     setNewApp({
@@ -63,7 +65,7 @@ export default function InternshipPrep({ showToast }) {
   const handleUpdateStatus = async (appId, newStatus) => {
     const target = applications.find(a => a.id === appId)
     if (!target) return
-    const updated = await saveApplication({ ...target, status: newStatus })
+    const updated = await saveApplication(user?.uid, { ...target, status: newStatus })
     setApplications(updated)
     showToast(`Updated status to "${newStatus}"`)
   }
