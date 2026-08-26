@@ -523,3 +523,14 @@ Our vision is to create a platform where every student can confidently prepare f
 ## 📄 License
 
 This project is developed as an academic/student project for educational purposes.
+
+## Local Development
+
+The first screen is a responsive Prepwise student dashboard built with React, Vite, and Firestore.
+
+1. Install Node.js 18 or newer.
+2. Run `npm install` and then `npm run dev`.
+3. Copy `.env.example` to `.env.local` and add the Firebase Web App values from the Firebase console.
+4. Enable Firestore in the Firebase console. The app runs with local demo data until the environment values are present.
+
+Firestore helpers for experiences live in `src/services/firestore.js`.
