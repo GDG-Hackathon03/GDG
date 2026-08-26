@@ -14,25 +14,57 @@ import Resources from './components/Resources'
 import QuickSearchModal from './components/QuickSearchModal'
 import SettingsModal from './components/SettingsModal'
 import LoginPage from './components/LoginPage'
-import { storage } from './services/storage'
+import OnboardingFlow from './components/OnboardingFlow'
 import { loadProfile, loadUserProgress, saveUserProgress } from './services/userProfile'
 import { onAuthChange } from './services/auth'
 import { Check } from 'lucide-react'
 import './styles.css'
 
-// ─── Auth Gate ─────────────────────────────────────────────────────────────
+// ─── Auth Gate ─────────────────────────────────────────────────────────────────
+// Handles: loading → login → onboarding (first time) → app
 
 function AuthGate() {
-  const [authUser, setAuthUser] = useState(undefined) // undefined = loading
+  // undefined = checking auth, null = signed out, object = signed in
+  const [authUser, setAuthUser] = useState(undefined)
+  // undefined = loading profile, null = need onboarding, object = has profile
+  const [profile, setProfile] = useState(undefined)
+  const [progress, setProgress] = useState(null)
 
+  // 1. Listen for auth state
   useEffect(() => {
     const unsubscribe = onAuthChange((user) => {
       setAuthUser(user)
+      if (!user) {
+        setProfile(undefined)
+        setProgress(null)
+      }
     })
     return unsubscribe
   }, [])
 
-  if (authUser === undefined) {
+  // 2. When signed in, load profile from Firestore
+  useEffect(() => {
+    if (!authUser?.uid) return
+    setProfile(undefined) // show loading while fetching
+
+    Promise.all([
+      loadProfile(authUser.uid),
+      loadUserProgress(authUser.uid)
+    ]).then(([{ profile: p, isNewUser }, prog]) => {
+      setProgress(prog)
+      if (isNewUser || !p) {
+        setProfile(null) // trigger onboarding
+      } else {
+        setProfile(p)
+      }
+    }).catch(err => {
+      console.warn('Failed to load user data:', err)
+      setProfile(null) // fallback to onboarding
+    })
+  }, [authUser?.uid])
+
+  // ── Loading spinner
+  if (authUser === undefined || (authUser && profile === undefined)) {
     return (
       <div className="auth-loading">
         <div className="auth-loading-brand">
@@ -40,22 +72,44 @@ function AuthGate() {
           <span>LockIn</span>
         </div>
         <div className="spinner" />
+        <p className="auth-loading-label">
+          {authUser ? 'Loading your workspace…' : 'Checking sign-in…'}
+        </p>
       </div>
     )
   }
 
+  // ── Not signed in → Login
   if (!authUser) {
     return <LoginPage onLogin={setAuthUser} />
   }
 
-  return <App user={authUser} />
+  // ── Signed in but no profile → Onboarding
+  if (profile === null) {
+    return (
+      <OnboardingFlow
+        user={authUser}
+        onComplete={(savedProfile) => setProfile(savedProfile)}
+      />
+    )
+  }
+
+  // ── All good → Main App
+  return (
+    <App
+      user={authUser}
+      initialProfile={profile}
+      initialProgress={progress}
+      onProfileChange={setProfile}
+    />
+  )
 }
 
-// ─── Main App ───────────────────────────────────────────────────────────────
+// ─── Main App ─────────────────────────────────────────────────────────────────
 
-function App({ user }) {
+function App({ user, initialProfile, initialProgress, onProfileChange }) {
   const [active, setActive] = useState('Overview')
-  const [goal, setGoal] = useState('Placement')
+  const [goal, setGoal] = useState(initialProfile?.goal || 'Placement')
   const [menuOpen, setMenuOpen] = useState(false)
   const [toast, setToast] = useState('')
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -63,56 +117,40 @@ function App({ user }) {
   const [selectedCompany, setSelectedCompany] = useState(null)
   const [selectedExperience, setSelectedExperience] = useState(null)
 
-  // Persistent User Data – loaded from Firestore, cached in localStorage
-  const [profile, setProfile] = useState(() => storage.getProfile())
-  const [completedTopics, setCompletedTopics] = useState(() => storage.getCompletedTopics())
-  const [savedCompanies, setSavedCompanies] = useState(() => storage.getSavedCompanies())
-  const [profileLoaded, setProfileLoaded] = useState(false)
-
-  // Load user profile & progress from Firestore on mount
-  useEffect(() => {
-    if (!user?.uid) return
-    Promise.all([
-      loadProfile(user.uid),
-      loadUserProgress(user.uid)
-    ]).then(([profile, progress]) => {
-      // Merge display name from Google account if profile is empty
-      const merged = {
-        ...profile,
-        name: profile?.name || user.displayName || '',
-        photoURL: user.photoURL || null
-      }
-      setProfile(merged)
-      if (progress.completedTopics) setCompletedTopics(progress.completedTopics)
-      if (progress.savedCompanies) setSavedCompanies(progress.savedCompanies)
-      setProfileLoaded(true)
-    }).catch(err => {
-      console.warn('Failed to load user data from Firestore:', err)
-      setProfileLoaded(true)
-    })
-  }, [user?.uid])
+  // User data — all sourced from Firestore via AuthGate
+  const [profile, setProfileState] = useState(initialProfile)
+  const [completedTopics, setCompletedTopics] = useState(
+    initialProgress?.completedTopics || {}
+  )
+  const [savedCompanies, setSavedCompanies] = useState(
+    initialProgress?.savedCompanies || []
+  )
 
   const showToast = (message) => {
     setToast(message)
     window.setTimeout(() => setToast(''), 2800)
   }
 
+  const handleProfileChange = (updated) => {
+    setProfileState(updated)
+    if (updated.goal) setGoal(updated.goal)
+    if (onProfileChange) onProfileChange(updated)
+  }
+
   const toggleTopicCompletion = (topicId) => {
     setCompletedTopics(prev => {
       const next = { ...prev, [topicId]: !prev[topicId] }
-      storage.setCompletedTopics(next)
-      // Persist to Firestore
-      if (user?.uid) saveUserProgress(user.uid, { completedTopics: next, savedCompanies })
+      saveUserProgress(user.uid, { completedTopics: next, savedCompanies })
       return next
     })
   }
 
   const toggleSaveCompany = (companyId) => {
     setSavedCompanies(prev => {
-      const next = prev.includes(companyId) ? prev.filter(id => id !== companyId) : [...prev, companyId]
-      storage.setSavedCompanies(next)
-      // Persist to Firestore
-      if (user?.uid) saveUserProgress(user.uid, { completedTopics, savedCompanies: next })
+      const next = prev.includes(companyId)
+        ? prev.filter(id => id !== companyId)
+        : [...prev, companyId]
+      saveUserProgress(user.uid, { completedTopics, savedCompanies: next })
       return next
     })
   }
@@ -228,26 +266,23 @@ function App({ user }) {
         )}
       </main>
 
-      {/* Global Quick Search ⌘K Dialog */}
       <QuickSearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
         onNavigate={handleQuickNavigate}
       />
 
-      {/* Workspace Settings Dialog */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         profile={profile}
-        setProfile={setProfile}
+        setProfile={handleProfileChange}
         goal={goal}
         setGoal={setGoal}
         showToast={showToast}
         user={user}
       />
 
-      {/* Global Toast */}
       {toast && (
         <div className="toast">
           <Check size={16} /> {toast}

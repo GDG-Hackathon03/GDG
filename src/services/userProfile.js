@@ -2,41 +2,40 @@ import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import { db, firebaseConfigured } from '../firebase'
 import { storage } from './storage'
 
-const DEFAULT_PROFILE = {
-  name: '',
-  major: 'Computer Science',
-  year: '3rd Year',
-  targetRole: 'Software Engineer',
-  targetCompany: 'Google / Atlassian',
-  streak: 1
-}
-
 // ─── Profile ─────────────────────────────────────────────────────────────────
 
+/**
+ * Load profile from Firestore. Returns { profile, isNewUser }
+ * isNewUser = true means no Firestore doc exists yet → show onboarding
+ */
 export const loadProfile = async (uid) => {
-  // 1. Try Firestore
   if (firebaseConfigured && db && uid) {
     try {
       const snap = await getDoc(doc(db, 'users', uid))
       if (snap.exists()) {
         const data = snap.data()
-        // Keep local cache in sync
-        storage.setProfile(data.profile || DEFAULT_PROFILE)
-        return data.profile || DEFAULT_PROFILE
+        const profile = data.profile || null
+        if (profile) {
+          storage.setProfile(profile)
+          return { profile, isNewUser: false }
+        }
       }
+      // Doc doesn't exist or has no profile → new user
+      return { profile: null, isNewUser: true }
     } catch (err) {
       console.warn('Firestore loadProfile failed, using localStorage:', err)
     }
   }
-  // 2. Fallback to localStorage
-  return storage.getProfile()
+  // Fallback: check localStorage
+  const cached = storage.getProfile(null)
+  const isNewUser = !cached || !cached.onboarded
+  return { profile: cached, isNewUser }
 }
 
 export const saveProfile = async (uid, profileData) => {
   // Always update localStorage first (instant feedback)
   storage.setProfile(profileData)
 
-  // Then persist to Firestore
   if (firebaseConfigured && db && uid) {
     try {
       const ref = doc(db, 'users', uid)
@@ -46,6 +45,7 @@ export const saveProfile = async (uid, profileData) => {
       } else {
         await setDoc(ref, {
           profile: profileData,
+          progress: { completedTopics: {}, savedCompanies: [] },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         })
@@ -64,7 +64,6 @@ export const loadUserProgress = async (uid) => {
       const snap = await getDoc(doc(db, 'users', uid))
       if (snap.exists() && snap.data().progress) {
         const progress = snap.data().progress
-        // Sync cache
         if (progress.completedTopics) storage.setCompletedTopics(progress.completedTopics)
         if (progress.savedCompanies) storage.setSavedCompanies(progress.savedCompanies)
         return progress
@@ -80,7 +79,6 @@ export const loadUserProgress = async (uid) => {
 }
 
 export const saveUserProgress = async (uid, progressData) => {
-  // Update localStorage
   if (progressData.completedTopics !== undefined) storage.setCompletedTopics(progressData.completedTopics)
   if (progressData.savedCompanies !== undefined) storage.setSavedCompanies(progressData.savedCompanies)
 
