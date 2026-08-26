@@ -38,7 +38,7 @@ export default function Overview({
   // Daily task items with persistence
   const [tasks, setTasks] = useState(() => {
     try {
-      const saved = localStorage.getItem('prepwise_daily_tasks')
+      const saved = localStorage.getItem('lockin_daily_tasks')
       if (saved) return JSON.parse(saved)
     } catch (e) {
       console.warn('Failed to load tasks', e)
@@ -53,7 +53,7 @@ export default function Overview({
 
   useEffect(() => {
     try {
-      localStorage.setItem('prepwise_daily_tasks', JSON.stringify(tasks))
+      localStorage.setItem('lockin_daily_tasks', JSON.stringify(tasks))
     } catch (e) {
       console.warn('Failed to save tasks', e)
     }

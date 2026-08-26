@@ -58,7 +58,7 @@ export default function ProgressTracker({
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `Prepwise_Readiness_Report_${new Date().toISOString().split('T')[0]}.json`
+    a.download = `LockIn_Readiness_Report_${new Date().toISOString().split('T')[0]}.json`
     a.click()
     showToast('Preparation Diagnostic Report exported successfully!')
   }

@@ -48,7 +48,7 @@ export default function Sidebar({
     <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
       <div className="brand">
         <span className="brand-spark">✦</span>
-        <span>prepwise</span>
+        <span>LockIn</span>
       </div>
 
       <button className="close-menu" onClick={() => setMenuOpen(false)} aria-label="Close menu">

@@ -13,11 +13,47 @@ import ProgressTracker from './components/ProgressTracker'
 import Resources from './components/Resources'
 import QuickSearchModal from './components/QuickSearchModal'
 import SettingsModal from './components/SettingsModal'
+import LoginPage from './components/LoginPage'
 import { storage } from './services/storage'
+import { loadProfile, loadUserProgress, saveUserProgress } from './services/userProfile'
+import { onAuthChange } from './services/auth'
 import { Check } from 'lucide-react'
 import './styles.css'
 
-export default function App() {
+// ─── Auth Gate ─────────────────────────────────────────────────────────────
+
+function AuthGate() {
+  const [authUser, setAuthUser] = useState(undefined) // undefined = loading
+
+  useEffect(() => {
+    const unsubscribe = onAuthChange((user) => {
+      setAuthUser(user)
+    })
+    return unsubscribe
+  }, [])
+
+  if (authUser === undefined) {
+    return (
+      <div className="auth-loading">
+        <div className="auth-loading-brand">
+          <span className="brand-spark">✦</span>
+          <span>LockIn</span>
+        </div>
+        <div className="spinner" />
+      </div>
+    )
+  }
+
+  if (!authUser) {
+    return <LoginPage onLogin={setAuthUser} />
+  }
+
+  return <App user={authUser} />
+}
+
+// ─── Main App ───────────────────────────────────────────────────────────────
+
+function App({ user }) {
   const [active, setActive] = useState('Overview')
   const [goal, setGoal] = useState('Placement')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -27,10 +63,34 @@ export default function App() {
   const [selectedCompany, setSelectedCompany] = useState(null)
   const [selectedExperience, setSelectedExperience] = useState(null)
 
-  // Persistent User Data
+  // Persistent User Data – loaded from Firestore, cached in localStorage
   const [profile, setProfile] = useState(() => storage.getProfile())
   const [completedTopics, setCompletedTopics] = useState(() => storage.getCompletedTopics())
   const [savedCompanies, setSavedCompanies] = useState(() => storage.getSavedCompanies())
+  const [profileLoaded, setProfileLoaded] = useState(false)
+
+  // Load user profile & progress from Firestore on mount
+  useEffect(() => {
+    if (!user?.uid) return
+    Promise.all([
+      loadProfile(user.uid),
+      loadUserProgress(user.uid)
+    ]).then(([profile, progress]) => {
+      // Merge display name from Google account if profile is empty
+      const merged = {
+        ...profile,
+        name: profile?.name || user.displayName || '',
+        photoURL: user.photoURL || null
+      }
+      setProfile(merged)
+      if (progress.completedTopics) setCompletedTopics(progress.completedTopics)
+      if (progress.savedCompanies) setSavedCompanies(progress.savedCompanies)
+      setProfileLoaded(true)
+    }).catch(err => {
+      console.warn('Failed to load user data from Firestore:', err)
+      setProfileLoaded(true)
+    })
+  }, [user?.uid])
 
   const showToast = (message) => {
     setToast(message)
@@ -41,6 +101,8 @@ export default function App() {
     setCompletedTopics(prev => {
       const next = { ...prev, [topicId]: !prev[topicId] }
       storage.setCompletedTopics(next)
+      // Persist to Firestore
+      if (user?.uid) saveUserProgress(user.uid, { completedTopics: next, savedCompanies })
       return next
     })
   }
@@ -49,6 +111,8 @@ export default function App() {
     setSavedCompanies(prev => {
       const next = prev.includes(companyId) ? prev.filter(id => id !== companyId) : [...prev, companyId]
       storage.setSavedCompanies(next)
+      // Persist to Firestore
+      if (user?.uid) saveUserProgress(user.uid, { completedTopics, savedCompanies: next })
       return next
     })
   }
@@ -71,6 +135,7 @@ export default function App() {
         menuOpen={menuOpen}
         setMenuOpen={setMenuOpen}
         profile={profile}
+        user={user}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
@@ -85,6 +150,7 @@ export default function App() {
           }}
           onOpenSettings={() => setIsSettingsOpen(true)}
           profile={profile}
+          user={user}
         />
 
         {active === 'Overview' && (
@@ -178,6 +244,7 @@ export default function App() {
         goal={goal}
         setGoal={setGoal}
         showToast={showToast}
+        user={user}
       />
 
       {/* Global Toast */}
@@ -192,5 +259,5 @@ export default function App() {
 
 const rootElement = document.getElementById('root')
 if (rootElement) {
-  createRoot(rootElement).render(<App />)
+  createRoot(rootElement).render(<AuthGate />)
 }

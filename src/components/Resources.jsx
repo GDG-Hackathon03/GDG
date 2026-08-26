@@ -19,7 +19,7 @@ export default function Resources({ showToast }) {
   const [activeCategory, setActiveCategory] = useState('All')
   const [bookmarkedIds, setBookmarkedIds] = useState(() => {
     try {
-      const saved = localStorage.getItem('prepwise_bookmarked_resources')
+      const saved = localStorage.getItem('lockin_bookmarked_resources')
       return saved ? JSON.parse(saved) : ['res-1', 'res-3']
     } catch {
       return ['res-1', 'res-3']
@@ -43,7 +43,7 @@ export default function Resources({ showToast }) {
       : [...bookmarkedIds, id]
     setBookmarkedIds(next)
     try {
-      localStorage.setItem('prepwise_bookmarked_resources', JSON.stringify(next))
+      localStorage.setItem('lockin_bookmarked_resources', JSON.stringify(next))
     } catch (err) {
       console.warn(err)
     }

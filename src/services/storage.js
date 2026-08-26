@@ -2,7 +2,7 @@
 
 const getStoredItem = (key, fallback) => {
   try {
-    const data = localStorage.getItem(`prepwise_${key}`)
+    const data = localStorage.getItem(`lockin_${key}`)
     return data ? JSON.parse(data) : fallback
   } catch (error) {
     console.warn(`Error reading from localStorage (${key}):`, error)
@@ -12,7 +12,7 @@ const getStoredItem = (key, fallback) => {
 
 const setStoredItem = (key, value) => {
   try {
-    localStorage.setItem(`prepwise_${key}`, JSON.stringify(value))
+    localStorage.setItem(`lockin_${key}`, JSON.stringify(value))
   } catch (error) {
     console.warn(`Error saving to localStorage (${key}):`, error)
   }

@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { X, Check, User, Sparkles, Target, RotateCcw } from 'lucide-react'
+import { X, Check, RotateCcw, LogOut } from 'lucide-react'
 import { storage } from '../services/storage'
+import { saveProfile } from '../services/userProfile'
+import { signOut } from '../services/auth'
 
 export default function SettingsModal({
   isOpen,
@@ -9,10 +11,11 @@ export default function SettingsModal({
   setProfile,
   goal,
   setGoal,
-  showToast
+  showToast,
+  user
 }) {
   const [formData, setFormData] = useState({
-    name: profile?.name || 'Arjun Kumar',
+    name: profile?.name || '',
     major: profile?.major || 'Computer Science Engineering',
     year: profile?.year || '3rd Year (2026 Batch)',
     targetRole: profile?.targetRole || 'Software Engineer (SDE-1)',
@@ -23,7 +26,7 @@ export default function SettingsModal({
 
   if (!isOpen) return null
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault()
     const updated = {
       ...profile,
@@ -34,8 +37,9 @@ export default function SettingsModal({
       targetCompany: formData.targetCompany
     }
     setProfile(updated)
-    storage.setProfile(updated)
-    showToast('Student workspace profile updated successfully!')
+    // Save to Firestore + localStorage
+    await saveProfile(user?.uid, updated)
+    showToast('Profile saved to your account!')
     onClose()
   }
 
@@ -44,6 +48,16 @@ export default function SettingsModal({
       localStorage.clear()
       showToast('Local cache reset. Reloading defaults...')
       window.location.reload()
+    }
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      showToast('Signed out successfully.')
+      onClose()
+    } catch (err) {
+      showToast('Failed to sign out. Please try again.')
     }
   }
 
@@ -57,9 +71,14 @@ export default function SettingsModal({
         <div className="share-head">
           <span className="section-kicker">STUDENT WORKSPACE PREFERENCES</span>
           <h2>Customize Your Preparation Profile</h2>
-          <p>
-            Configure your target roles, companies, graduation timeline, and study preferences.
-          </p>
+          {user?.email && (
+            <p className="settings-account-row">
+              {user.photoURL && (
+                <img src={user.photoURL} alt="" className="settings-google-avatar" referrerPolicy="no-referrer" />
+              )}
+              Signed in as <strong>{user.email}</strong>
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleSave} className="share-form">
@@ -143,7 +162,7 @@ export default function SettingsModal({
             <div className="setting-toggle">
               <div>
                 <strong>Daily Practice Reminder</strong>
-                <span>Keep your 4-day prep streak active</span>
+                <span>Keep your prep streak active</span>
               </div>
               <button
                 type="button"
@@ -170,21 +189,31 @@ export default function SettingsModal({
           </div>
 
           <div className="form-submit-row" style={{ marginTop: 24, justifyContent: 'space-between' }}>
-            <button
-              type="button"
-              className="text-button"
-              style={{ color: '#c85e4c' }}
-              onClick={handleResetData}
-            >
-              <RotateCcw size={14} /> Reset Local Cache
-            </button>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                className="text-button"
+                style={{ color: '#c85e4c' }}
+                onClick={handleResetData}
+              >
+                <RotateCcw size={14} /> Reset Cache
+              </button>
+              <button
+                type="button"
+                className="text-button"
+                style={{ color: '#77766f' }}
+                onClick={handleSignOut}
+              >
+                <LogOut size={14} /> Sign Out
+              </button>
+            </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button type="button" className="filter-button" onClick={onClose}>
                 Cancel
               </button>
               <button type="submit" className="primary-button">
-                <Check size={15} /> Save Changes
+                <Check size={15} /> Save to Account
               </button>
             </div>
           </div>
